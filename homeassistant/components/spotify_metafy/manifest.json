@@ -1,0 +1,16 @@
+{
+  "domain": "spotify_metafy",
+  "name": "Spotify Metafy",
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/spotify_metafy",
+  "requirements": [
+    "spotipy==2.11.1"
+  ],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "dependencies": [],
+  "codeowners": [
+    "@rako77"
+  ]
+}

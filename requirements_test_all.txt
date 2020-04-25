@@ -741,6 +741,7 @@ speak2mary==1.4.0
 
 # homeassistant.components.spotify
 # homeassistant.components.spotify_images_server
+# homeassistant.components.spotify_metafy
 spotipy==2.11.1
 
 # homeassistant.components.recorder
