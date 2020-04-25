@@ -1,0 +1,8 @@
+{
+  "domain": "spotify_images_server",
+  "name": "Spotify Images Server",
+  "documentation": "https://github.com/rako77/spotify_metafi",
+  "requirements": ["spotipy==2.11.1"],
+  "dependencies": [],
+  "codeowners": []
+}

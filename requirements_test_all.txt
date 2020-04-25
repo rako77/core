@@ -740,6 +740,7 @@ somecomfort==0.5.2
 speak2mary==1.4.0
 
 # homeassistant.components.spotify
+# homeassistant.components.spotify_images_server
 spotipy==2.11.1
 
 # homeassistant.components.recorder
