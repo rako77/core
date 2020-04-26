@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, List, Optional
 from aiohttp import ClientError
 from spotipy import Spotify, SpotifyException
 
+from homeassistant.components.media_player import DOMAIN as MEDIA_PLAYER_DOMAIN
 from homeassistant.components.media_player import MediaPlayerDevice
 from homeassistant.components.spotify.media_player import SpotifyMediaPlayer
 from homeassistant.components.media_player.const import (
@@ -24,7 +25,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.config_entry_oauth2_flow import OAuth2Session
 from homeassistant.helpers.entity import Entity
 from homeassistant.exceptions import PlatformNotReady
-from homeassistant.helpers.entity_registry import EntityRegistry
+from homeassistant.helpers.entity_registry import EntityRegistry, async_get_registry
+from homeassistant.helpers.entity_component import async_get_integration
+from homeassistant.helpers.entity_component import EntityComponent
 
 from .const import DOMAIN
 
@@ -56,20 +59,27 @@ async def async_setup_platform(
         spotify_id = user["spotify_id"]
         destination = user["destination"]
         playlists = user["playlists"]
-
+        spotify_entity_id = user["spotify_entity_id"]
         spotify_keys = hass.data["spotify"].keys()
         for i in spotify_keys:
             if hass.data["spotify"][i]["spotify_me"]["id"] == spotify_id:
                 for playlist in playlists:
                     uri = playlist["uri"]
-                    entity_registry: EntityRegistry = hass.helpers.entity_registry
-                    spotify_media_player: SpotifyMediaPlayer = await entity_registry.async_get(
-                        i
+                    entity_component: EntityComponent = hass.data[MEDIA_PLAYER_DOMAIN]
+                    spotify_media_player: SpotifyMediaPlayer = entity_component.get_entity(
+                        spotify_entity_id
                     )
+                    if spotify_media_player == None:
+                        raise PlatformNotReady
+
+                    # registry: EntityRegistry = await async_get_registry(hass)
+                    # spotify_media_player: SpotifyMediaPlayer = registry.async_get(
+                    #     spotify_entity_id
+                    # )
                     spotify_playlist_info = spotify_media_player._spotify.playlist(uri)
-                    playlist_name = user_prefix + spotify_playlist_info(uri)
+                    playlist_name = user_prefix + spotify_playlist_info["name"]
                     mmp = MetafyMediaPlayer(
-                        hass.data[DOMAIN][i]["spotify_session"],
+                        hass.data["spotify"][i]["spotify_session"],
                         spotify_media_player,
                         uri,
                         destination,
@@ -166,7 +176,7 @@ class MetafyMediaPlayer(MediaPlayerDevice):
         current_uri = spotify._get_id(MEDIA_TYPE_PLAYLIST, self._id)
         if (
             uri == current_uri
-            and self._spotify_media_player.source == self._destination
+            and self._spotify_media_player.source() == self._destination
         ):
             if self._spotify_media_player._currently_playing["is_playing"]:
                 return STATE_PLAYING
@@ -216,7 +226,7 @@ class MetafyMediaPlayer(MediaPlayerDevice):
         self._spotify_media_player.media_pause()
 
     @spotify_exception_handler
-    def async_update(self) -> None:
+    async def async_update(self) -> None:
         """Update state and attributes."""
         if not self.enabled:
             return
