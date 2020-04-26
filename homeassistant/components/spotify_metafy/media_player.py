@@ -28,6 +28,7 @@ from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers.entity_registry import EntityRegistry, async_get_registry
 from homeassistant.helpers.entity_component import async_get_integration
 from homeassistant.helpers.entity_component import EntityComponent
+from homeassistant.helpers.event import async_track_state_change
 
 from .const import DOMAIN
 
@@ -35,7 +36,7 @@ _LOGGER = logging.getLogger(__name__)
 
 ICON = "mdi:spotify"
 
-SCAN_INTERVAL = timedelta(seconds=30)
+SCAN_INTERVAL = timedelta(seconds=60)
 # todo update on state change of spotify component
 
 SUPPORT_SPOTIFY_METAFY = SUPPORT_PAUSE | SUPPORT_PLAY
@@ -56,37 +57,30 @@ async def async_setup_platform(
 
     for user in config["users"]:
         user_prefix = user["user_prefix"] if "user_prefix" in user else ""
-        spotify_id = user["spotify_id"]
         destination = user["destination"]
         playlists = user["playlists"]
         spotify_entity_id = user["spotify_entity_id"]
-        spotify_keys = hass.data["spotify"].keys()
-        for i in spotify_keys:
-            if hass.data["spotify"][i]["spotify_me"]["id"] == spotify_id:
-                for playlist in playlists:
-                    uri = playlist["uri"]
-                    entity_component: EntityComponent = hass.data[MEDIA_PLAYER_DOMAIN]
-                    spotify_media_player: SpotifyMediaPlayer = entity_component.get_entity(
-                        spotify_entity_id
-                    )
-                    if spotify_media_player == None:
-                        raise PlatformNotReady
-
-                    # registry: EntityRegistry = await async_get_registry(hass)
-                    # spotify_media_player: SpotifyMediaPlayer = registry.async_get(
-                    #     spotify_entity_id
-                    # )
-                    spotify_playlist_info = spotify_media_player._spotify.playlist(uri)
-                    playlist_name = user_prefix + spotify_playlist_info["name"]
-                    mmp = MetafyMediaPlayer(
-                        hass.data["spotify"][i]["spotify_session"],
-                        spotify_media_player,
-                        uri,
-                        destination,
-                        playlist_name,
-                        spotify_playlist_info,
-                    )
-                    entities.append(mmp)
+        entity_component: EntityComponent = hass.data[MEDIA_PLAYER_DOMAIN]
+        for playlist in playlists:
+            uri = playlist["uri"]
+            spotify_media_player: SpotifyMediaPlayer = entity_component.get_entity(
+                spotify_entity_id
+            )
+            if spotify_media_player == None:
+                raise PlatformNotReady
+            spotify_playlist_info = spotify_media_player._spotify.playlist(uri)
+            playlist_name = user_prefix + spotify_playlist_info["name"]
+            mmp = MetafyMediaPlayer(
+                spotify_media_player,
+                uri,
+                destination,
+                playlist_name,
+                spotify_playlist_info,
+            )
+            entities.append(mmp)
+            async_track_state_change(
+                hass, [spotify_entity_id], mmp.async_update_on_state_change
+            )
 
     async_add_entities(entities, True)
     return True
@@ -115,7 +109,6 @@ class MetafyMediaPlayer(MediaPlayerDevice):
 
     def __init__(
         self,
-        session: OAuth2Session,
         spotify_media_player: SpotifyMediaPlayer,
         playlist_id: str,
         destination: str,
@@ -125,7 +118,6 @@ class MetafyMediaPlayer(MediaPlayerDevice):
         """Initialize."""
         self._id = playlist_id
         self._name = name
-        self._session = session
         self._destination = destination
         self._spotify_media_player = spotify_media_player
         self._spotify_playlist_info = spotify_playlist_info
@@ -220,11 +212,13 @@ class MetafyMediaPlayer(MediaPlayerDevice):
         self._spotify_media_player.select_source(self._destination)
         self._spotify_media_player.play_media(MEDIA_TYPE_PLAYLIST, self._id)
         self._spotify_media_player.media_play()
+        self._spotify_media_player.schedule_update_ha_state(True)
 
     @spotify_exception_handler
     def media_pause(self) -> None:
         """Pause playback."""
         self._spotify_media_player.media_pause()
+        self._spotify_media_player.schedule_update_ha_state(True)
 
     @spotify_exception_handler
     async def async_update(self) -> None:
@@ -232,7 +226,7 @@ class MetafyMediaPlayer(MediaPlayerDevice):
         if not self.enabled:
             return
 
-        if not self._session.valid_token:
+        if not self._spotify_media_player._session.valid_token:
             self._spotify_media_player.update()
 
         # todo make this call less frequently
@@ -240,3 +234,8 @@ class MetafyMediaPlayer(MediaPlayerDevice):
             self._id
         )
         self._spotify_playlist_info["images"] = playlist_image
+
+    @spotify_exception_handler
+    def async_update_on_state_change(self, entity_id, old_state, new_state) -> None:
+        """Update state and attributes."""
+        self.async_write_ha_state()
