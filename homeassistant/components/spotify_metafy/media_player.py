@@ -164,7 +164,10 @@ class MetafyMediaPlayer(MediaPlayerDevice):
         spotify = self._spotify_media_player._spotify
         uri = spotify._get_id(MEDIA_TYPE_PLAYLIST, uri)
         current_uri = spotify._get_id(MEDIA_TYPE_PLAYLIST, self._id)
-        if uri == current_uri:
+        if (
+            uri == current_uri
+            and self._spotify_media_player.source == self._destination
+        ):
             if self._spotify_media_player._currently_playing["is_playing"]:
                 return STATE_PLAYING
             return STATE_PAUSED
@@ -203,6 +206,8 @@ class MetafyMediaPlayer(MediaPlayerDevice):
     @spotify_exception_handler
     def media_play(self) -> None:
         """Start or resume playback."""
+        self._spotify_media_player.select_source(self._destination)
+        self._spotify_media_player.play_media(MEDIA_TYPE_PLAYLIST, self._id)
         self._spotify_media_player.media_play()
 
     @spotify_exception_handler
